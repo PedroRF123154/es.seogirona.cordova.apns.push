@@ -1,0 +1,17 @@
+{
+  "name": "cordova-plugin-apns-push",
+  "version": "1.0.0",
+  "description": "APNs push notifications for Cordova iOS (no Firebase).",
+  "cordova": {
+    "id": "es.seogirona.cordova.apns.push",
+    "platforms": ["ios"]
+  },
+  "keywords": [
+    "cordova",
+    "ios",
+    "apns",
+    "push",
+    "notification"
+  ],
+  "license": "MIT"
+}
