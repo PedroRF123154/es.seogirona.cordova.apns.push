@@ -1,51 +1,50 @@
 var exec = require('cordova/exec');
 
 function Push() {
-
-    this.handlers = {
-        registration: [],
-        notification: [],
-        error: []
-    };
-
+  this._handlers = { registration: [], notification: [], error: [] };
+  this._inited = false;
 }
 
-Push.prototype.on = function(event, callback) {
-
-    if (this.handlers[event]) {
-        this.handlers[event].push(callback);
-    }
-
+Push.prototype.on = function (event, cb) {
+  if (this._handlers[event]) this._handlers[event].push(cb);
 };
 
-Push.prototype.emit = function(event, data) {
-
-    if (!this.handlers[event]) return;
-
-    this.handlers[event].forEach(function(cb) {
-        try { cb(data); } catch(e){}
-    });
-
+Push.prototype._emit = function (event, payload) {
+  (this._handlers[event] || []).forEach(function (cb) {
+    try { cb(payload); } catch (e) {}
+  });
 };
 
-Push.prototype.init = function(options) {
+Push.prototype.init = function (options) {
+  var self = this;
+  options = options || {};
 
-    var self = this;
+  if (self._inited) return self;
+  self._inited = true;
 
-    exec(function(msg){
+  exec(
+    function (msg) {
+      if (msg && msg.type) self._emit(msg.type, msg.data);
+    },
+    function (err) {
+      self._emit('error', { message: String(err || 'Unknown error') });
+    },
+    'APNSPush',
+    'init',
+    [options]
+  );
 
-        if(msg && msg.type) {
-            self.emit(msg.type, msg.data);
-        }
+  return self;
+};
 
-    }, function(err){
-
-        self.emit('error', err);
-
-    }, 'APNSPush', 'init', [options]);
-
-    return self;
-
+Push.prototype.requestPermissions = function (cb) {
+  exec(
+    function (res) { if (cb) cb(res); },
+    function (err) { if (cb) cb({ granted: false, error: String(err || 'Unknown error') }); },
+    'APNSPush',
+    'requestPermissions',
+    []
+  );
 };
 
 module.exports = new Push();
