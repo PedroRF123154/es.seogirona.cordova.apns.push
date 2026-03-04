@@ -16,13 +16,13 @@ backend usando **APNs (.p8)**.
 ## Development
 
 ``` bash
-cordova plugin add https://github.com/PedroRF123154/es.seogirona.cordova.apns.push --variable APNS_ENV=development
+cordova plugin add https://github.com/PedroRF123154/es.seogirona.cordova.apns.push.git --variable APNS_ENV=development
 ```
 
 ## Production
 
 ``` bash
-cordova plugin add https://github.com/PedroRF123154/es.seogirona.cordova.apns.push --variable APNS_ENV=production
+cordova plugin add https://github.com/PedroRF123154/es.seogirona.cordova.apns.push.git --variable APNS_ENV=production
 ```
 
 ------------------------------------------------------------------------
