@@ -1,28 +1,23 @@
 #!/usr/bin/env node
-
 /**
- * Cordova iOS entitlements helper
- * - Ensures Entitlements-Debug.plist and Entitlements-Release.plist exist
- * - Ensures aps-environment is set (development|production)
+ * Ensure iOS entitlements exist and are referenced by Xcode project.
+ * Creates Entitlements-Debug.plist and Entitlements-Release.plist in platforms/ios/<AppName>/
+ * Sets CODE_SIGN_ENTITLEMENTS for Debug/Release in platforms/ios/<AppName>.xcodeproj/project.pbxproj
  */
 
 const fs = require("fs");
 const path = require("path");
 
-function log(msg) {
-  console.log("[apns-entitlements] " + msg);
-}
+function log(msg) { console.log("[apns-entitlements] " + msg); }
 
-function fileExists(p) {
+function exists(p) {
   try { return fs.existsSync(p); } catch { return false; }
 }
 
-function ensureDir(p) {
-  if (!fileExists(p)) fs.mkdirSync(p, { recursive: true });
-}
+function readFile(p) { return fs.readFileSync(p, "utf8"); }
+function writeFile(p, c) { fs.writeFileSync(p, c, "utf8"); }
 
-function plistWithAps(env) {
-  // Simple plist (xml) for entitlements
+function plistContent(env) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -34,104 +29,123 @@ function plistWithAps(env) {
 `;
 }
 
-function readEnvFromCordovaConfig(projectRoot, defaultEnv) {
-  // Try read variable passed during plugin install: APNS_ENV
-  // Cordova doesn't always expose variables here, so we also fallback.
-  // We'll also try to infer based on build config when possible.
-  return defaultEnv || "development";
-}
-
-function findIosPlatformDir(projectRoot) {
-  const p = path.join(projectRoot, "platforms", "ios");
-  return fileExists(p) ? p : null;
-}
-
-function findAppDir(iosPlatformDir) {
-  // Find the .xcodeproj to infer app name, then locate the sibling folder
-  const entries = fs.readdirSync(iosPlatformDir);
+function detectIosProject(iosDir) {
+  const entries = fs.readdirSync(iosDir);
   const xcodeproj = entries.find(e => e.endsWith(".xcodeproj"));
   if (!xcodeproj) return null;
 
   const appName = xcodeproj.replace(/\.xcodeproj$/, "");
-  const appDir = path.join(iosPlatformDir, appName);
-  if (fileExists(appDir) && fs.statSync(appDir).isDirectory()) return appDir;
+  const pbxproj = path.join(iosDir, xcodeproj, "project.pbxproj");
+  const appDir = path.join(iosDir, appName);
 
-  // fallback: search for a folder that contains *-Info.plist
-  for (const e of entries) {
-    const candidate = path.join(iosPlatformDir, e);
-    if (fileExists(candidate) && fs.statSync(candidate).isDirectory()) {
-      const files = fs.readdirSync(candidate);
-      if (files.some(f => f.endsWith("-Info.plist") || f === "Info.plist")) return candidate;
-    }
-  }
-  return null;
+  if (!exists(pbxproj) || !exists(appDir)) return null;
+  return { appName, pbxproj, appDir };
 }
 
-function upsertApsEnvironment(plistPath, env) {
-  // If file doesn't exist: create with aps-environment
-  if (!fileExists(plistPath)) {
-    fs.writeFileSync(plistPath, plistWithAps(env), "utf8");
-    log(`Created ${path.basename(plistPath)} with aps-environment=${env}`);
-    return;
+function ensureEntitlementsFiles(appDir, env) {
+  const debugPlist = path.join(appDir, "Entitlements-Debug.plist");
+  const releasePlist = path.join(appDir, "Entitlements-Release.plist");
+
+  if (!exists(debugPlist)) {
+    writeFile(debugPlist, plistContent(env));
+    log("Created Entitlements-Debug.plist");
+  }
+  if (!exists(releasePlist)) {
+    writeFile(releasePlist, plistContent(env));
+    log("Created Entitlements-Release.plist");
   }
 
-  // If exists: patch (very safely) the aps-environment string
-  let content = fs.readFileSync(plistPath, "utf8");
-
-  if (content.includes("<key>aps-environment</key>")) {
-    // Replace the next <string>...</string> after aps-environment
-    content = content.replace(
-      /(<key>\s*aps-environment\s*<\/key>\s*<string>)([^<]*)(<\/string>)/m,
-      `$1${env}$3`
-    );
-  } else {
-    // Insert into <dict>...</dict>
-    content = content.replace(
-      /<dict>/m,
-      `<dict>\n  <key>aps-environment</key>\n  <string>${env}</string>`
-    );
+  // Ensure value in existing files
+  for (const p of [debugPlist, releasePlist]) {
+    let c = readFile(p);
+    if (c.includes("<key>aps-environment</key>")) {
+      c = c.replace(
+        /(<key>\s*aps-environment\s*<\/key>\s*<string>)([^<]*)(<\/string>)/m,
+        `$1${env}$3`
+      );
+      writeFile(p, c);
+    }
   }
 
-  fs.writeFileSync(plistPath, content, "utf8");
-  log(`Updated ${path.basename(plistPath)} aps-environment=${env}`);
+  return { debugPlist, releasePlist };
+}
+
+function setCodeSignEntitlements(pbxprojPath, appName) {
+  let pbx = readFile(pbxprojPath);
+
+  const debugValue = `${appName}/Entitlements-Debug.plist`;
+  const releaseValue = `${appName}/Entitlements-Release.plist`;
+
+  // Helper: set or insert CODE_SIGN_ENTITLEMENTS inside a buildSettings block that contains a given config name
+  // We'll do a pragmatic text patch:
+  // - Find XCBuildConfiguration sections
+  // - For each, if name = Debug -> set CODE_SIGN_ENTITLEMENTS to debugValue
+  // - If name = Release -> set to releaseValue
+  //
+  // This is not a full pbxproj parser, but works well for Cordova projects.
+
+  function patchForConfig(configName, value) {
+    // Match blocks like:
+    // /* Debug */ = { isa = XCBuildConfiguration; buildSettings = { ... }; name = Debug; };
+    // We replace/insert CODE_SIGN_ENTITLEMENTS in buildSettings.
+    const re = new RegExp(
+      `(\\/\\*\\s*${configName}\\s*\\*\\/\\s*=\\s*\\{[\\s\\S]*?isa\\s*=\\s*XCBuildConfiguration;[\\s\\S]*?buildSettings\\s*=\\s*\\{)([\\s\\S]*?)(\\};[\\s\\S]*?name\\s*=\\s*${configName};[\\s\\S]*?\\};)`,
+      "g"
+    );
+
+    pbx = pbx.replace(re, (match, pre, settings, post) => {
+      if (/CODE_SIGN_ENTITLEMENTS\s*=/.test(settings)) {
+        settings = settings.replace(/CODE_SIGN_ENTITLEMENTS\s*=\s*[^;]+;/g, `CODE_SIGN_ENTITLEMENTS = ${value};`);
+      } else {
+        // Insert near start of settings
+        settings = `\n\t\t\t\tCODE_SIGN_ENTITLEMENTS = ${value};` + settings;
+      }
+      return pre + settings + post;
+    });
+  }
+
+  patchForConfig("Debug", debugValue);
+  patchForConfig("Release", releaseValue);
+
+  writeFile(pbxprojPath, pbx);
+  log("Patched project.pbxproj CODE_SIGN_ENTITLEMENTS for Debug/Release");
+}
+
+function readPluginVar(ctx, name, fallback) {
+  // Cordova sometimes provides plugin variables here
+  try {
+    const vars = ctx?.opts?.plugin?.pluginInfo?._et?._root?._children || null;
+    // Too brittle; rely on env if present
+  } catch {}
+  // Also check environment variable for convenience
+  if (process.env[name]) return process.env[name];
+  return fallback;
 }
 
 module.exports = function (ctx) {
   try {
-    const projectRoot = ctx && ctx.opts && ctx.opts.projectRoot
-      ? ctx.opts.projectRoot
-      : process.cwd();
-
-    const iosDir = findIosPlatformDir(projectRoot);
-    if (!iosDir) {
+    const projectRoot = ctx?.opts?.projectRoot || process.cwd();
+    const iosDir = path.join(projectRoot, "platforms", "ios");
+    if (!exists(iosDir)) {
       log("platforms/ios not found, skipping.");
       return;
     }
 
-    const appDir = findAppDir(iosDir);
-    if (!appDir) {
-      log("Could not detect iOS app directory, skipping.");
+    const info = detectIosProject(iosDir);
+    if (!info) {
+      log("Could not detect iOS project (.xcodeproj) and app folder, skipping.");
       return;
     }
 
-    // Determine desired env:
-    // - If user installed plugin with --variable APNS_ENV=production -> we can’t always read it here reliably,
-    //   so we keep default development and allow manual override by setting APNS_ENV in config.xml (config-file handles it)
-    // In practice: config-file injection will run when files exist; this hook ensures they exist.
-    const envDefault = "development";
-    const env = readEnvFromCordovaConfig(projectRoot, envDefault);
+    // Best-effort env: default development
+    let env = readPluginVar(ctx, "APNS_ENV", "development");
+    env = (env === "production") ? "production" : "development";
 
-    // Ensure entitlements files exist in the app folder
-    const debugEnt = path.join(appDir, "Entitlements-Debug.plist");
-    const releaseEnt = path.join(appDir, "Entitlements-Release.plist");
+    ensureEntitlementsFiles(info.appDir, env);
+    setCodeSignEntitlements(info.pbxproj, info.appName);
 
-    upsertApsEnvironment(debugEnt, env);
-    upsertApsEnvironment(releaseEnt, env);
-
-    log(`Entitlements ensured in: ${appDir}`);
-    log("If you install with --variable APNS_ENV=production, Cordova config-file will overwrite the value on prepare.");
-
+    log(`Done. App=${info.appName} env=${env}`);
   } catch (e) {
-    console.error("[apns-entitlements] ERROR:", e && e.stack ? e.stack : e);
+    console.error("[apns-entitlements] ERROR:", e?.stack || e);
   }
 };
