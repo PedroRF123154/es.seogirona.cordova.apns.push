@@ -2,8 +2,8 @@
 <plugin id="es.seogirona.cordova.apns.push" version="1.0.0"
         xmlns="http://apache.org/cordova/ns/plugins/1.0">
 
-  <name>cordova-plugin-apns-push</name>
-  <description>APNs Push Notifications plugin for Cordova iOS</description>
+  <name>es.seogirona.cordova.apns.push</name>
+  <description>APNs Push Notifications for Cordova iOS (no Firebase)</description>
   <license>MIT</license>
 
   <engines>
@@ -16,7 +16,6 @@
   </js-module>
 
   <platform name="ios">
-
     <preference name="APNS_ENV" default="development"/>
 
     <config-file target="config.xml" parent="/*">
@@ -27,12 +26,11 @@
 
     <header-file src="src/ios/APNSPush.h"/>
     <source-file src="src/ios/APNSPush.m"/>
-
     <header-file src="src/ios/APNSPush+Swizzle.h"/>
     <source-file src="src/ios/APNSPush+Swizzle.m"/>
 
     <config-file target="*-Info.plist" parent="NSUserNotificationUsageDescription">
-      <string>This app uses push notifications.</string>
+      <string>This app uses notifications to keep you informed.</string>
     </config-file>
 
     <config-file target="*-Info.plist" parent="UIBackgroundModes">
@@ -44,7 +42,6 @@
     <config-file target="*-Entitlements.plist" parent="aps-environment">
       <string>$APNS_ENV</string>
     </config-file>
-
   </platform>
 
 </plugin>
