@@ -6,4 +6,4 @@ Emits JS events: `registration`, `notification`, `error`.
 ## Install (from GitHub)
 
 ```bash
-cordova plugin add https://github.com/<TU_USUARIO>/cordova-plugin-apns-push --variable APNS_ENV=development
+cordova plugin add https://github.com/PedroRF123154/es.seogirona.cordova.apns.push --variable APNS_ENV=development
