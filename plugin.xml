@@ -1,43 +1,78 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<plugin id="es.seogirona.cordova.apns.push" version="1.0.0"
-        xmlns="http://apache.org/cordova/ns/plugins/1.0">
 
-  <name>es.seogirona.cordova.apns.push</name>
-  <description>APNs Push Notifications for Cordova iOS (no Firebase)</description>
-  <license>MIT</license>
+<plugin id="es.seogirona.cordova.apns.push"
+        version="1.0.0"
+        xmlns="http://apache.org/cordova/ns/plugins/1.0"
+        xmlns:android="http://schemas.android.com/apk/res/android">
 
-  <engines>
-    <engine name="cordova" version=">=8.0.0" />
-    <engine name="cordova-ios" version=">=5.0.0" />
-  </engines>
+    <name>es.seogirona.cordova.apns.push</name>
 
-  <js-module src="www/PushNotification.js" name="PushNotification">
-    <clobbers target="PushNotification"/>
-  </js-module>
+    <description>
+        Cordova plugin for iOS APNs push notifications without Firebase.
+    </description>
 
-  <platform name="ios">
+    <license>MIT</license>
+
+    <keywords>
+        cordova, ios, apns, push, notification
+    </keywords>
+
+    <engines>
+        <engine name="cordova" version=">=8.0.0"/>
+        <engine name="cordova-ios" version=">=5.0.0"/>
+    </engines>
+
+    <!-- Variable for development or production APNs -->
     <preference name="APNS_ENV" default="development"/>
 
-    <config-file target="config.xml" parent="/*">
-      <feature name="APNSPush">
-        <param name="ios-package" value="APNSPush"/>
-      </feature>
-    </config-file>
+    <!-- JS interface -->
+    <js-module src="www/PushNotification.js" name="PushNotification">
+        <clobbers target="PushNotification"/>
+    </js-module>
 
-    <header-file src="src/ios/APNSPush.h"/>
-    <source-file src="src/ios/APNSPush.m"/>
-    <header-file src="src/ios/APNSPush+Swizzle.h"/>
-    <source-file src="src/ios/APNSPush+Swizzle.m"/>
+    <!-- iOS platform -->
+    <platform name="ios">
 
-    <config-file target="*-Info.plist" parent="NSUserNotificationUsageDescription">
-      <string>This app uses notifications to keep you informed.</string>
-    </config-file>
+        <!-- Register plugin -->
+        <config-file target="config.xml" parent="/*">
+            <feature name="APNSPush">
+                <param name="ios-package" value="APNSPush"/>
+            </feature>
+        </config-file>
 
-    <config-file target="*-Info.plist" parent="UIBackgroundModes">
-      <array>
-        <string>remote-notification</string>
-      </array>
-    </config-file>
-  </platform>
+        <!-- Native files -->
+        <header-file src="src/ios/APNSPush.h"/>
+        <source-file src="src/ios/APNSPush.m"/>
+
+        <header-file src="src/ios/APNSPush+Swizzle.h"/>
+        <source-file src="src/ios/APNSPush+Swizzle.m"/>
+
+        <!-- Notification permission text -->
+        <config-file target="*-Info.plist" parent="NSUserNotificationUsageDescription">
+            <string>This app uses push notifications to keep you informed.</string>
+        </config-file>
+
+        <!-- Enable background push notifications -->
+        <config-file target="*-Info.plist" parent="UIBackgroundModes">
+            <array>
+                <string>remote-notification</string>
+            </array>
+        </config-file>
+
+        <!-- Entitlements Debug -->
+        <config-file target="Entitlements-Debug.plist" parent="aps-environment">
+            <string>$APNS_ENV</string>
+        </config-file>
+
+        <!-- Entitlements Release -->
+        <config-file target="Entitlements-Release.plist" parent="aps-environment">
+            <string>$APNS_ENV</string>
+        </config-file>
+
+        <!-- Hooks to create entitlements automatically -->
+        <hook type="after_platform_add" src="scripts/ios-entitlements.js"/>
+        <hook type="after_prepare" src="scripts/ios-entitlements.js"/>
+
+    </platform>
 
 </plugin>
