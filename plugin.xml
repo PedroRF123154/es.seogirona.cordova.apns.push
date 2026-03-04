@@ -38,10 +38,6 @@
         <string>remote-notification</string>
       </array>
     </config-file>
-
-    <config-file target="*-Entitlements.plist" parent="aps-environment">
-      <string>$APNS_ENV</string>
-    </config-file>
   </platform>
 
 </plugin>
