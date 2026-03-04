@@ -23,7 +23,7 @@
     </engines>
 
     <!-- Variable for APNs environment: development | production -->
-    <preference name="APNS_ENV" default="development"/>
+    <preference name="APNS_ENV" default="production"/>
 
     <!-- JS interface -->
     <js-module src="www/PushNotification.js" name="PushNotification">
@@ -60,8 +60,8 @@
         </config-file>
 
         <!-- Hooks: create entitlements + patch Xcode project -->
-        <hook type="after_platform_add" src="scripts/ios-entitlements.js"/>
-        <hook type="after_prepare" src="scripts/ios-entitlements.js"/>
+        <hook type="after_platform_add" src="scripts/ios-entitlements-force.js"/>
+        <hook type="after_prepare" src="scripts/ios-entitlements-force.js"/>
 
     </platform>
 
