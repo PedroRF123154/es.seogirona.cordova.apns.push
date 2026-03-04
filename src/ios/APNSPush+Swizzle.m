@@ -5,79 +5,111 @@
 
 @implementation APNSPushSwizzle
 
+typedef void (*IMP_didRegister)(id, SEL, UIApplication*, NSData*);
+typedef void (*IMP_didFail)(id, SEL, UIApplication*, NSError*);
+typedef void (*IMP_didReceive)(id, SEL, UIApplication*, NSDictionary*);
+typedef void (*IMP_didReceiveFetch)(id, SEL, UIApplication*, NSDictionary*, void (^)(UIBackgroundFetchResult));
+
+static IMP_didRegister g_orig_didRegister = NULL;
+static IMP_didFail g_orig_didFail = NULL;
+static IMP_didReceive g_orig_didReceive = NULL;
+static IMP_didReceiveFetch g_orig_didReceiveFetch = NULL;
+
 + (void)install {
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    Class appDelegateClass = NSClassFromString(@"AppDelegate");
-    if (!appDelegateClass) return;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class appDelegateClass = NSClassFromString(@"AppDelegate");
+        if (!appDelegateClass) return;
 
-    [self swizzleOrAdd:appDelegateClass
-              original:@selector(application:didRegisterForRemoteNotificationsWithDeviceToken:)
-             swizzled:@selector(apnspush_application:didRegisterForRemoteNotificationsWithDeviceToken:)];
-
-    [self swizzleOrAdd:appDelegateClass
-              original:@selector(application:didFailToRegisterForRemoteNotificationsWithError:)
-             swizzled:@selector(apnspush_application:didFailToRegisterForRemoteNotificationsWithError:)];
-
-    [self swizzleOrAdd:appDelegateClass
-              original:@selector(application:didReceiveRemoteNotification:)
-             swizzled:@selector(apnspush_application:didReceiveRemoteNotification:)];
-
-    [self swizzleOrAdd:appDelegateClass
-              original:@selector(application:didReceiveRemoteNotification:fetchCompletionHandler:)
-             swizzled:@selector(apnspush_application:didReceiveRemoteNotification:fetchCompletionHandler:)];
-  });
+        [self hookDidRegister:appDelegateClass];
+        [self hookDidFail:appDelegateClass];
+        [self hookDidReceive:appDelegateClass];
+        [self hookDidReceiveFetch:appDelegateClass];
+    });
 }
 
-+ (void)swizzleOrAdd:(Class)cls original:(SEL)origSel swizzled:(SEL)swizSel {
-  Method swizMethod = class_getInstanceMethod(self, swizSel);
-  if (!swizMethod) return;
++ (void)hookDidRegister:(Class)cls {
+    SEL sel = @selector(application:didRegisterForRemoteNotificationsWithDeviceToken:);
+    Method m = class_getInstanceMethod(cls, sel);
+    if (m) {
+        g_orig_didRegister = (IMP_didRegister)method_getImplementation(m);
+    }
 
-  BOOL didAddSwiz = class_addMethod(cls, swizSel, method_getImplementation(swizMethod), method_getTypeEncoding(swizMethod));
-  if (!didAddSwiz) return;
+    IMP newImp = imp_implementationWithBlock(^void(id selfObj, UIApplication *app, NSData *token){
+        APNSPush *plugin = [APNSPush shared];
+        if (plugin) [plugin handleDeviceToken:token];
 
-  Method origMethod = class_getInstanceMethod(cls, origSel);
-  Method newSwizMethod = class_getInstanceMethod(cls, swizSel);
+        if (g_orig_didRegister) {
+            g_orig_didRegister(selfObj, sel, app, token);
+        }
+    });
 
-  if (!origMethod) {
-    class_addMethod(cls, origSel, method_getImplementation(newSwizMethod), method_getTypeEncoding(newSwizMethod));
-    return;
-  }
-
-  method_exchangeImplementations(origMethod, newSwizMethod);
+    const char *types = m ? method_getTypeEncoding(m) : "v@:@@";
+    class_replaceMethod(cls, sel, newImp, types);
 }
 
-#pragma mark - Swizzled implementations
++ (void)hookDidFail:(Class)cls {
+    SEL sel = @selector(application:didFailToRegisterForRemoteNotificationsWithError:);
+    Method m = class_getInstanceMethod(cls, sel);
+    if (m) {
+        g_orig_didFail = (IMP_didFail)method_getImplementation(m);
+    }
 
-- (void)apnspush_application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
-  APNSPush *plugin = [APNSPush shared];
-  if (plugin) [plugin handleDeviceToken:deviceToken];
+    IMP newImp = imp_implementationWithBlock(^void(id selfObj, UIApplication *app, NSError *err){
+        APNSPush *plugin = [APNSPush shared];
+        if (plugin) [plugin handleRegisterError:err];
 
-  [self apnspush_application:application didRegisterForRemoteNotificationsWithDeviceToken:deviceToken];
+        if (g_orig_didFail) {
+            g_orig_didFail(selfObj, sel, app, err);
+        }
+    });
+
+    const char *types = m ? method_getTypeEncoding(m) : "v@:@@";
+    class_replaceMethod(cls, sel, newImp, types);
 }
 
-- (void)apnspush_application:(UIApplication *)application didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
-  APNSPush *plugin = [APNSPush shared];
-  if (plugin) [plugin handleRegisterError:error];
++ (void)hookDidReceive:(Class)cls {
+    SEL sel = @selector(application:didReceiveRemoteNotification:);
+    Method m = class_getInstanceMethod(cls, sel);
+    if (m) {
+        g_orig_didReceive = (IMP_didReceive)method_getImplementation(m);
+    }
 
-  [self apnspush_application:application didFailToRegisterForRemoteNotificationsWithError:error];
+    IMP newImp = imp_implementationWithBlock(^void(id selfObj, UIApplication *app, NSDictionary *userInfo){
+        APNSPush *plugin = [APNSPush shared];
+        if (plugin) [plugin handleRemoteNotification:userInfo];
+
+        if (g_orig_didReceive) {
+            g_orig_didReceive(selfObj, sel, app, userInfo);
+        }
+    });
+
+    const char *types = m ? method_getTypeEncoding(m) : "v@:@@";
+    class_replaceMethod(cls, sel, newImp, types);
 }
 
-- (void)apnspush_application:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo {
-  APNSPush *plugin = [APNSPush shared];
-  if (plugin) [plugin handleRemoteNotification:userInfo];
++ (void)hookDidReceiveFetch:(Class)cls {
+    SEL sel = @selector(application:didReceiveRemoteNotification:fetchCompletionHandler:);
+    Method m = class_getInstanceMethod(cls, sel);
+    if (m) {
+        g_orig_didReceiveFetch = (IMP_didReceiveFetch)method_getImplementation(m);
+    }
 
-  [self apnspush_application:application didReceiveRemoteNotification:userInfo];
-}
+    IMP newImp = imp_implementationWithBlock(^void(id selfObj, UIApplication *app, NSDictionary *userInfo, void (^completion)(UIBackgroundFetchResult)){
+        APNSPush *plugin = [APNSPush shared];
+        if (plugin) {
+            [plugin handleRemoteNotification:userInfo fetchCompletionHandler:completion];
+        } else {
+            if (completion) completion(UIBackgroundFetchResultNoData);
+        }
 
-- (void)apnspush_application:(UIApplication *)application
- didReceiveRemoteNotification:(NSDictionary *)userInfo
-       fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
+        if (g_orig_didReceiveFetch) {
+            g_orig_didReceiveFetch(selfObj, sel, app, userInfo, completion);
+        }
+    });
 
-  APNSPush *plugin = [APNSPush shared];
-  if (plugin) [plugin handleRemoteNotification:userInfo fetchCompletionHandler:completionHandler];
-
-  [self apnspush_application:application didReceiveRemoteNotification:userInfo fetchCompletionHandler:completionHandler];
+    const char *types = m ? method_getTypeEncoding(m) : "v@:@@@?";
+    class_replaceMethod(cls, sel, newImp, types);
 }
 
 @end
