@@ -1,1 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin id="es.seogirona.cordova.apns.push" version="1.0.0"
+        xmlns="http://apache.org/cordova/ns/plugins/1.0">
+  <name>Cordova APNs Push</name>
+  <description>APNs push notifications for Cordova iOS (no Firebase). Emits registration/notification/error events.</description>
+  <license>MIT</license>
+  <keywords>cordova, ios, apns, push, notification</keywords>
 
+  <engines>
+    <engine name="cordova" version=">=8.0.0" />
+    <engine name="cordova-ios" version=">=5.0.0" />
+  </engines>
+
+  <js-module src="www/PushNotification.js" name="PushNotification">
+    <clobbers target="PushNotification" />
+  </js-module>
+
+  <platform name="ios">
+    <preference name="APNS_ENV" default="development" />
+
+    <config-file target="config.xml" parent="/*">
+      <feature name="APNSPush">
+        <param name="ios-package" value="APNSPush" />
+      </feature>
+    </config-file>
+
+    <header-file src="src/ios/APNSPush.h" />
+    <source-file src="src/ios/APNSPush.m" />
+    <header-file src="src/ios/APNSPush+Swizzle.h" />
+    <source-file src="src/ios/APNSPush+Swizzle.m" />
+
+    <!-- iOS permission text -->
+    <config-file target="*-Info.plist" parent="NSUserNotificationUsageDescription">
+      <string>We use notifications to keep you informed.</string>
+    </config-file>
+
+    <!-- Allow background remote notifications (optional but recommended) -->
+    <config-file target="*-Info.plist" parent="UIBackgroundModes">
+      <array>
+        <string>remote-notification</string>
+      </array>
+    </config-file>
+
+    <!-- Entitlements: aps-environment (development|production) -->
+    <config-file target="*-Entitlements.plist" parent="aps-environment">
+      <string>$APNS_ENV</string>
+    </config-file>
+  </platform>
+</plugin>
