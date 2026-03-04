@@ -3,13 +3,17 @@
 
 @interface APNSPush : CDVPlugin <UNUserNotificationCenterDelegate>
 
-@property (nonatomic, strong) NSString *callbackId;
+@property (nonatomic, strong) NSString *eventCallbackId;
 
 + (instancetype)shared;
 
 - (void)init:(CDVInvokedUrlCommand*)command;
+- (void)requestPermissions:(CDVInvokedUrlCommand*)command;
 
-- (void)handleDeviceToken:(NSData*)deviceToken;
-- (void)handleNotification:(NSDictionary*)userInfo;
+// Called by swizzled AppDelegate methods:
+- (void)handleDeviceToken:(NSData *)deviceToken;
+- (void)handleRemoteNotification:(NSDictionary *)userInfo;
+- (void)handleRemoteNotification:(NSDictionary *)userInfo fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler;
+- (void)handleRegisterError:(NSError *)error;
 
 @end
