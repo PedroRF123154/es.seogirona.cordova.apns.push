@@ -22,17 +22,18 @@
         <engine name="cordova-ios" version=">=5.0.0"/>
     </engines>
 
-    <!-- Variable for development or production APNs -->
+    <!-- Variable for APNs environment: development | production -->
     <preference name="APNS_ENV" default="development"/>
 
-    <!-- JavaScript API -->
+    <!-- JS interface -->
     <js-module src="www/PushNotification.js" name="PushNotification">
         <clobbers target="PushNotification"/>
     </js-module>
 
+    <!-- iOS platform -->
     <platform name="ios">
 
-        <!-- Register plugin -->
+        <!-- Register plugin in Cordova -->
         <config-file target="config.xml" parent="/*">
             <feature name="APNSPush">
                 <param name="ios-package" value="APNSPush"/>
@@ -51,24 +52,14 @@
             <string>This app uses push notifications to keep you informed.</string>
         </config-file>
 
-        <!-- Enable background notifications -->
+        <!-- Enable background remote notifications -->
         <config-file target="*-Info.plist" parent="UIBackgroundModes">
             <array>
                 <string>remote-notification</string>
             </array>
         </config-file>
 
-        <!-- Entitlements Debug -->
-        <config-file target="$PROJECT_NAME/Entitlements-Debug.plist" parent="aps-environment">
-            <string>$APNS_ENV</string>
-        </config-file>
-
-        <!-- Entitlements Release -->
-        <config-file target="$PROJECT_NAME/Entitlements-Release.plist" parent="aps-environment">
-            <string>$APNS_ENV</string>
-        </config-file>
-
-        <!-- Hooks to ensure entitlements exist -->
+        <!-- Hooks: create entitlements + patch Xcode project -->
         <hook type="after_platform_add" src="scripts/ios-entitlements.js"/>
         <hook type="after_prepare" src="scripts/ios-entitlements.js"/>
 
