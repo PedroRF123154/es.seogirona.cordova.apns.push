@@ -25,12 +25,11 @@
     <!-- Variable for development or production APNs -->
     <preference name="APNS_ENV" default="development"/>
 
-    <!-- JS interface -->
+    <!-- JavaScript API -->
     <js-module src="www/PushNotification.js" name="PushNotification">
         <clobbers target="PushNotification"/>
     </js-module>
 
-    <!-- iOS platform -->
     <platform name="ios">
 
         <!-- Register plugin -->
@@ -40,7 +39,7 @@
             </feature>
         </config-file>
 
-        <!-- Native files -->
+        <!-- Native iOS files -->
         <header-file src="src/ios/APNSPush.h"/>
         <source-file src="src/ios/APNSPush.m"/>
 
@@ -52,7 +51,7 @@
             <string>This app uses push notifications to keep you informed.</string>
         </config-file>
 
-        <!-- Enable background push notifications -->
+        <!-- Enable background notifications -->
         <config-file target="*-Info.plist" parent="UIBackgroundModes">
             <array>
                 <string>remote-notification</string>
@@ -60,16 +59,16 @@
         </config-file>
 
         <!-- Entitlements Debug -->
-        <config-file target="Entitlements-Debug.plist" parent="aps-environment">
+        <config-file target="$PROJECT_NAME/Entitlements-Debug.plist" parent="aps-environment">
             <string>$APNS_ENV</string>
         </config-file>
 
         <!-- Entitlements Release -->
-        <config-file target="Entitlements-Release.plist" parent="aps-environment">
+        <config-file target="$PROJECT_NAME/Entitlements-Release.plist" parent="aps-environment">
             <string>$APNS_ENV</string>
         </config-file>
 
-        <!-- Hooks to create entitlements automatically -->
+        <!-- Hooks to ensure entitlements exist -->
         <hook type="after_platform_add" src="scripts/ios-entitlements.js"/>
         <hook type="after_prepare" src="scripts/ios-entitlements.js"/>
 
